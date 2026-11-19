@@ -3,17 +3,91 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Solmar Bay — an open-world crime game</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c141c;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #eef2f5; }
+  #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .panel { background: rgba(10, 18, 26, 0.72); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(2px); }
+  #stats { position: absolute; top: 14px; left: 14px; min-width: 240px; }
+  #health-bar { width: 210px; height: 12px; background: #2a343c; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #27ae60, #2ecc71); }
+  #health-text { font-size: 12px; color: #b9c4cc; }
+  #cash { font-size: 22px; font-weight: 700; color: #7ee081; }
+  #stars { font-size: 22px; letter-spacing: 3px; }
+  #objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    max-width: 560px; text-align: center; font-size: 15px; font-weight: 600; }
+  #minimap { position: absolute; top: 14px; right: 14px; width: 200px; height: 200px;
+    border: 2px solid rgba(255,255,255,0.25); border-radius: 8px; background: rgba(10,18,26,0.8); }
+  #feed { position: absolute; left: 14px; bottom: 14px; max-width: 420px; font-size: 13px;
+    line-height: 1.5; }
+  #feed div { background: rgba(10,18,26,0.66); border-radius: 6px; padding: 3px 8px; margin-top: 4px; }
+  #speed { position: absolute; right: 18px; bottom: 14px; text-align: right; }
+  #speed span { font-size: 40px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+  #speed-label { font-size: 13px; color: #b9c4cc; }
+  #ammo { position: absolute; right: 18px; bottom: 96px; font-size: 13px; color: #dfe7ec;
+    background: rgba(10,18,26,0.66); border-radius: 6px; padding: 4px 8px; }
+  #banner { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 34px; font-weight: 800; letter-spacing: 1px; color: #ffd21a;
+    text-shadow: 0 3px 14px rgba(0,0,0,0.8); opacity: 0; transition: opacity 0.4s; text-align: center; }
+  #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
+    margin: -5px 0 0 -5px; border: 2px solid rgba(255,255,255,0.85); border-radius: 50%; }
+  #start-screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
+    justify-content: center; background: linear-gradient(160deg, rgba(8,20,32,0.88), rgba(20,40,60,0.72)); }
+  #start-card { max-width: 640px; padding: 34px 40px; text-align: center;
+    background: rgba(8, 16, 24, 0.82); border: 1px solid rgba(255,210,26,0.35); border-radius: 16px; }
+  #start-card h1 { margin: 0 0 4px; font-size: 54px; letter-spacing: 4px; color: #ffd21a; }
+  #start-card h2 { margin: 0 0 16px; font-size: 16px; font-weight: 400; color: #9fd8ff; }
+  #start-card p { font-size: 14px; line-height: 1.6; color: #d5dde3; text-align: left; }
+  #start-card .controls { font-size: 13px; color: #b9c4cc; text-align: left; line-height: 1.8; }
+  #start-card button { pointer-events: auto; cursor: pointer; font-size: 17px; font-weight: 700;
+    padding: 12px 26px; margin: 8px 6px 0; border-radius: 10px; border: none;
+    background: #ffd21a; color: #16202a; }
+  #start-card button.secondary { background: #2c3e50; color: #eef2f5; }
+  #start-card button:disabled { opacity: 0.4; cursor: default; }
+  #start-card .fine { font-size: 11px; color: #7d8a94; margin-top: 14px; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<div id="app"></div>
+<div id="hud">
+  <div id="stats" class="panel">
+    <div id="cash">$250</div>
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="health-text">HP 100</div>
+    <div id="stars">☆☆☆☆☆</div>
+  </div>
+  <div id="objective" class="panel"></div>
+  <canvas id="minimap" width="200" height="200"></canvas>
+  <div id="feed"></div>
+  <div id="speed"><span id="speed"></span><div id="speed-label"></div></div>
+  <div id="ammo"></div>
+  <div id="banner"></div>
+  <div id="crosshair"></div>
+</div>
+<div id="start-screen">
+  <div id="start-card">
+    <h1>SOLMAR BAY</h1>
+    <h2>An open-world crime story &mdash; Dana Vega, courier of the Bay</h2>
+    <p>Sun, salt air and bad decisions. Steal cars, outrun the Bay PD, take jobs from the
+    underworld and work your way through five missions &mdash; from a hot-wired sedan at the
+    docks to the big score at the old airport.</p>
+    <p class="controls">
+      <b>W A S D</b> move &nbsp;·&nbsp; <b>Mouse</b> look (click to lock) &nbsp;·&nbsp; <b>Shift</b> run<br>
+      <b>Space</b> jump &nbsp;·&nbsp; <b>E</b> steal / exit car &nbsp;·&nbsp; <b>Click</b> punch or shoot<br>
+      <b>N</b> start next mission &nbsp;·&nbsp; Gold beacon marks your objective
+    </p>
+    <button id="btn-new">New Game</button>
+    <button id="btn-continue" class="secondary">Continue</button>
+    <p class="fine">Solmar Bay is an original game. Its city, characters and story are invented;
+    it is not affiliated with any commercial game. Progress saves in your browser.</p>
+  </div>
+</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
