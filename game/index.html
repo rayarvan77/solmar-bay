@@ -1,93 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>Solmar Bay — an open-world crime game</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c141c;
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #eef2f5; }
-  #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  #hud { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-  .panel { background: rgba(10, 18, 26, 0.72); border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(2px); }
-  #stats { position: absolute; top: 14px; left: 14px; min-width: 240px; }
-  #health-bar { width: 210px; height: 12px; background: #2a343c; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
-  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #27ae60, #2ecc71); }
-  #health-text { font-size: 12px; color: #b9c4cc; }
-  #cash { font-size: 22px; font-weight: 700; color: #7ee081; }
-  #stars { font-size: 22px; letter-spacing: 3px; }
-  #objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-    max-width: 560px; text-align: center; font-size: 15px; font-weight: 600; }
-  #minimap { position: absolute; top: 14px; right: 14px; width: 200px; height: 200px;
-    border: 2px solid rgba(255,255,255,0.25); border-radius: 8px; background: rgba(10,18,26,0.8); }
-  #feed { position: absolute; left: 14px; bottom: 14px; max-width: 420px; font-size: 13px;
-    line-height: 1.5; }
-  #feed div { background: rgba(10,18,26,0.66); border-radius: 6px; padding: 3px 8px; margin-top: 4px; }
-  #speed { position: absolute; right: 18px; bottom: 14px; text-align: right; }
-  #speed span { font-size: 40px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
-  #speed-label { font-size: 13px; color: #b9c4cc; }
-  #ammo { position: absolute; right: 18px; bottom: 96px; font-size: 13px; color: #dfe7ec;
-    background: rgba(10,18,26,0.66); border-radius: 6px; padding: 4px 8px; }
-  #banner { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
-    font-size: 34px; font-weight: 800; letter-spacing: 1px; color: #ffd21a;
-    text-shadow: 0 3px 14px rgba(0,0,0,0.8); opacity: 0; transition: opacity 0.4s; text-align: center; }
-  #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
-    margin: -5px 0 0 -5px; border: 2px solid rgba(255,255,255,0.85); border-radius: 50%; }
-  #start-screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
-    justify-content: center; background: linear-gradient(160deg, rgba(8,20,32,0.88), rgba(20,40,60,0.72)); }
-  #start-card { max-width: 640px; padding: 34px 40px; text-align: center;
-    background: rgba(8, 16, 24, 0.82); border: 1px solid rgba(255,210,26,0.35); border-radius: 16px; }
-  #start-card h1 { margin: 0 0 4px; font-size: 54px; letter-spacing: 4px; color: #ffd21a; }
-  #start-card h2 { margin: 0 0 16px; font-size: 16px; font-weight: 400; color: #9fd8ff; }
-  #start-card p { font-size: 14px; line-height: 1.6; color: #d5dde3; text-align: left; }
-  #start-card .controls { font-size: 13px; color: #b9c4cc; text-align: left; line-height: 1.8; }
-  #start-card button { pointer-events: auto; cursor: pointer; font-size: 17px; font-weight: 700;
-    padding: 12px 26px; margin: 8px 6px 0; border-radius: 10px; border: none;
-    background: #ffd21a; color: #16202a; }
-  #start-card button.secondary { background: #2c3e50; color: #eef2f5; }
-  #start-card button:disabled { opacity: 0.4; cursor: default; }
-  #start-card .fine { font-size: 11px; color: #7d8a94; margin-top: 14px; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #10141a; font-family: 'Segoe UI', Arial, sans-serif; }
+  #game-canvas { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+  #hud-top-right { position: absolute; top: 14px; right: 16px; text-align: right; text-shadow: 0 1px 3px #000; }
+  #hud-money { font-size: 26px; font-weight: 800; color: #7dff8a; }
+  #hud-wanted { font-size: 26px; letter-spacing: 4px; margin-top: 2px; }
+  #hud-health-wrap { width: 180px; height: 12px; background: rgba(0,0,0,0.55); border: 1px solid #555; margin-top: 8px; margin-left: auto; }
+  #hud-health-bar { height: 100%; width: 100%; background: #4caf50; }
+  #hud-health { font-size: 13px; margin-top: 3px; }
+  #hud-speed { position: absolute; bottom: 18px; right: 20px; font-size: 30px; font-weight: 800; text-shadow: 0 2px 4px #000; }
+  #hud-objective { position: absolute; top: 14px; left: 16px; max-width: 420px; font-size: 16px; font-weight: 600; background: rgba(0,0,0,0.55); padding: 8px 12px; border-left: 4px solid #ffd23c; border-radius: 4px; }
+  #hud-toast { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 700; background: rgba(0,0,0,0.65); padding: 10px 18px; border-radius: 6px; opacity: 0; transition: opacity 0.3s; text-align: center; max-width: 80vw; }
+  #hud-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); font-size: 14px; background: rgba(0,0,0,0.5); padding: 6px 12px; border-radius: 4px; white-space: nowrap; }
+  #minimap { position: absolute; left: 16px; bottom: 16px; width: 200px; height: 200px; border: 2px solid rgba(255,255,255,0.35); border-radius: 6px; background: #10141a; }
+  #phone { display: none; position: absolute; top: 70px; right: 16px; width: 320px; background: rgba(12,16,22,0.92); border: 1px solid #444; border-radius: 10px; padding: 14px; pointer-events: auto; }
+  #phone h2 { margin: 0 0 4px 0; font-size: 18px; color: #ff7ad9; }
+  #phone p { margin: 0 0 10px 0; font-size: 13px; color: #bbb; }
+  .mission-row { padding: 9px 10px; margin-bottom: 8px; background: #1b2230; border-radius: 6px; font-size: 14px; line-height: 1.35; }
+  .mission-row span { color: #aaa; font-size: 12.5px; }
+  .mission-row.done { opacity: 0.55; }
+  .mission-row.active { border: 1px solid #ffd23c; }
+  #start-screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 10, 16, 0.55); z-index: 10; }
+  #start-panel { text-align: center; background: rgba(10, 14, 22, 0.88); border: 1px solid #3a4556; border-radius: 14px; padding: 34px 44px; max-width: 560px; color: #eee; }
+  #game-title { font-size: 52px; margin: 0; letter-spacing: 3px; color: #ffd23c; text-shadow: 0 3px 0 #b03a2e; }
+  #game-title span { color: #ff5a3c; }
+  #start-panel .tagline { font-size: 16px; color: #c8d2e0; margin: 10px 0 18px 0; line-height: 1.5; }
+  #start-panel .controls { font-size: 13.5px; color: #9aa7b8; line-height: 1.7; margin-bottom: 22px; }
+  .big-btn { font-size: 19px; font-weight: 700; padding: 12px 30px; border: none; border-radius: 8px; cursor: pointer; background: #ffd23c; color: #1a1a1a; margin: 0 6px; }
+  .big-btn:hover { background: #ffe06a; }
+  #continue-btn { display: none; background: #3f8cff; color: #fff; }
+  #continue-btn:hover { background: #5b9dff; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js" } }
 </script>
 </head>
 <body>
-<div id="app"></div>
+<canvas id="game-canvas"></canvas>
+
 <div id="hud">
-  <div id="stats" class="panel">
-    <div id="cash">$250</div>
-    <div id="health-bar"><div id="health-fill"></div></div>
-    <div id="health-text">HP 100</div>
-    <div id="stars">☆☆☆☆☆</div>
+  <div id="hud-objective">Welcome to Solmar Bay.</div>
+  <div id="hud-top-right">
+    <div id="hud-money">$250</div>
+    <div id="hud-wanted">☆☆☆☆☆</div>
+    <div id="hud-health-wrap"><div id="hud-health-bar"></div></div>
+    <div id="hud-health">HP 100</div>
   </div>
-  <div id="objective" class="panel"></div>
+  <div id="hud-toast"></div>
+  <div id="hud-speed"></div>
+  <div id="hud-hint"></div>
   <canvas id="minimap" width="200" height="200"></canvas>
-  <div id="feed"></div>
-  <div id="speed"><span id="speed"></span><div id="speed-label"></div></div>
-  <div id="ammo"></div>
-  <div id="banner"></div>
-  <div id="crosshair"></div>
-</div>
-<div id="start-screen">
-  <div id="start-card">
-    <h1>SOLMAR BAY</h1>
-    <h2>An open-world crime story &mdash; Dana Vega, courier of the Bay</h2>
-    <p>Sun, salt air and bad decisions. Steal cars, outrun the Bay PD, take jobs from the
-    underworld and work your way through five missions &mdash; from a hot-wired sedan at the
-    docks to the big score at the old airport.</p>
-    <p class="controls">
-      <b>W A S D</b> move &nbsp;·&nbsp; <b>Mouse</b> look (click to lock) &nbsp;·&nbsp; <b>Shift</b> run<br>
-      <b>Space</b> jump &nbsp;·&nbsp; <b>E</b> steal / exit car &nbsp;·&nbsp; <b>Click</b> punch or shoot<br>
-      <b>N</b> start next mission &nbsp;·&nbsp; Gold beacon marks your objective
-    </p>
-    <button id="btn-new">New Game</button>
-    <button id="btn-continue" class="secondary">Continue</button>
-    <p class="fine">Solmar Bay is an original game. Its city, characters and story are invented;
-    it is not affiliated with any commercial game. Progress saves in your browser.</p>
+  <div id="phone">
+    <h2>Dana Vega</h2>
+    <p>Jobs around Solmar Bay. Click one to take it. (Tab to close)</p>
+    <div id="mission-list"></div>
   </div>
 </div>
+
+<div id="start-screen">
+  <div id="start-panel">
+    <h1 id="game-title">SOLMAR <span>BAY</span></h1>
+    <p class="tagline">An open-world crime game. Steal cars, outrun the cops, and run jobs for Dana Vega across a living city — all yours, no Rockstar involved.</p>
+    <p class="controls">
+      WASD move &nbsp;·&nbsp; Shift run &nbsp;·&nbsp; Mouse look (click to lock)<br>
+      E get in / out of a car &nbsp;·&nbsp; F punch &nbsp;·&nbsp; Click shoot<br>
+      Tab open Dana's phone &nbsp;·&nbsp; M mute &nbsp;·&nbsp; Progress saves automatically
+    </p>
+    <button id="start-btn" class="big-btn">▶ Start</button>
+    <button id="continue-btn" class="big-btn">Continue</button>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -1,82 +1,66 @@
-// Solmar Bay — deterministic screenshot staging.
-// The game reads ?shot=start|play|chase|mission&seed=1 and stages a scene
-// through its own render path, so screenshots are real renders of the game.
+// Solmar Bay — deterministic screenshot scenes for ?shot=1..4.
+// Each shot arranges the world at fixed positions and returns a fixed camera
+// pose, so the screenshots are reproducible on every run.
 import * as THREE from 'three';
 
-export function parseShotQuery(search) {
-  const params = new URLSearchParams(search || '');
-  return {
-    shot: params.get('shot') || null,
-    seed: parseInt(params.get('seed') || '7', 10) || 7,
-  };
+// Set the player up in a car at a fixed street spot, already moving.
+function putPlayerInCar(game, x, z, heading, speed) {
+  const car = game.givePlayerCar(x, z, heading, 0xb03a2e);
+  car.speed = speed;
+  game.player.carSpeed = speed;
+  return car;
 }
 
-// Stage one of the four screenshot scenes. `game` is the Game instance.
-export function stageShot(game, shot) {
-  const g = game;
-  g.hideStartScreen();
-  g.state = 'playing';
-  if (shot === 'start') {
-    g.state = 'menu';
-    g.showStartScreen();
-    // Orbiting camera over the city for the title shot.
-    g.camera.position.set(120, 90, 190);
-    g.camera.lookAt(0, 10, 0);
-    g.shotOrbit = true;
-    return;
+export function setupShot(game, n) {
+  const { player } = game;
+  if (n === 1) {
+    // Start screen: player on foot at the central plaza, wide skyline view.
+    game.teleportOnFoot(-8, -8, Math.PI * 0.25);
+    game.hud.setObjective('Welcome to Solmar Bay — press Start to play.');
+    return {
+      camPos: new THREE.Vector3(-120, 78, -120),
+      lookAt: new THREE.Vector3(10, 8, 10),
+      showStart: true,
+    };
   }
-  if (shot === 'play') {
-    // Dana driving a sedan down the main avenue, traffic around.
-    const car = g.enterNearestParked(true);
-    if (car) {
-      car.pos.set(-140, 0, -3.5);
-      car.heading = Math.PI / 2;
-      car.speed = 26;
-      car.syncMesh();
-      g.playerCar = car;
-      g.driving = true;
-      g.playerPos.set(-140, 0, -3.5);
-    }
-    g.missions.startNext();
-    g.hud.message('Welcome to Solmar Bay, Dana.');
-    g.hud.message('Mission: Hot Wheels — steal a car, drive to the Docks.');
-    return;
+  if (n === 2) {
+    // Driving: player cruising down a main avenue with traffic around.
+    putPlayerInCar(game, -34, -68, 0, 16);
+    game.hud.setObjective('Cruising Solmar Bay — press Tab to see Dana\u2019s jobs.');
+    return {
+      camPos: new THREE.Vector3(-34, 6, -88),
+      lookAt: new THREE.Vector3(-34, 2, -45),
+      showStart: false,
+    };
   }
-  if (shot === 'chase') {
-    const car = g.enterNearestParked(true);
-    if (car) {
-      // On the vertical road at x = 0 (lane +3.5), heading north (+z).
-      car.pos.set(3.5, 0, 40);
-      car.heading = 0;
-      car.speed = 30;
-      car.syncMesh();
-      g.playerCar = car;
-      g.driving = true;
-      g.playerPos.set(3.5, 0, 40);
-    }
-    g.police.wanted = 3;
-    g.police._spawnPoliceCar(g.playerPos);
-    g.police._spawnPoliceCar(g.playerPos);
-    g.missions.startNext();
-    g.hud.message('WANTED — 3 stars! Lose the Bay PD!');
-    return;
+  if (n === 3) {
+    // Police chase: wanted 3, two squad cars on the player's tail.
+    putPlayerInCar(game, 0, -102, 0, 22);
+    game.police.setWanted(3);
+    game.hud.setObjective('Wanted level 3 — lose the cops!');
+    // Spawn the squad explicitly (update() has not run yet, so no cars
+    // exist to reposition), then place them: two behind the player, one
+    // oncoming ahead, all inside the camera frame.
+    while (game.police.cars.length < 3) game.police.spawnPolice();
+    const cops = game.police.cars;
+    if (cops[0]) { cops[0].x = -3; cops[0].z = -124; cops[0].heading = 0; cops[0].speed = 14; }
+    if (cops[1]) { cops[1].x = 5; cops[1].z = -120; cops[1].heading = 0; cops[1].speed = 14; }
+    if (cops[2]) { cops[2].x = 3; cops[2].z = -40; cops[2].heading = Math.PI; cops[2].speed = 20; }
+    return {
+      camPos: new THREE.Vector3(6, 9, -132),
+      lookAt: new THREE.Vector3(0, 2, -70),
+      showStart: false,
+    };
   }
-  if (shot === 'mission') {
-    // Mission 2: timed delivery, Dana racing north.
-    const car = g.enterNearestParked(true);
-    if (car) {
-      // On the vertical road at x = 112 (lane +3.5), heading south (-z).
-      car.pos.set(115.5, 0, 196);
-      car.heading = Math.PI;
-      car.speed = 24;
-      car.syncMesh();
-      g.playerCar = car;
-      g.driving = true;
-      g.playerPos.set(115.5, 0, 196);
-    }
-    g.missions.index = 1;
-    g.missions.startNext();
-    g.hud.message('Mission: Express Run — 100 seconds to Northside!');
-    return;
-  }
+  // Mission: on foot at a glowing beacon, Dana waiting at the marker.
+  game.teleportOnFoot(-40, -2, Math.PI / 2);
+  game.missions.setMarker(-34, 34);
+  game.missions.dana.position.set(-33, 0, 32);
+  game.missions.dana.visible = true;
+  game.hud.setObjective('Job: bring the package to Dana — follow the beacon.');
+  return {
+    camPos: new THREE.Vector3(-52, 6, -16),
+    lookAt: new THREE.Vector3(-33, 2, 33),
+    showStart: false,
+  };
 }
