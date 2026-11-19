@@ -1,177 +1,149 @@
-// Solmar Bay — pedestrians. They stroll the sidewalks, wander at corners,
-// flee from speeding cars and gunfire, and fall over (briefly) when hit.
-// Hitting one is a crime: the caller is told through onCrime('hit-ped').
-import * as THREE from 'three';
-import { randRange, randInt, pick, clamp } from './util.js';
+// Pedestrians for Solmar Bay: simple low-poly walkers on the sidewalks.
+// They wander, flee from fast cars, and can be knocked down.
+import * as THREE from '../vendor/three.module.min.js';
+import { randRange, randInt, pick, dist } from './util.js';
 
-const SHIRTS = [0xc94f4f, 0x4f7ec9, 0x53a05a, 0xd8b13c, 0x8a5fc9, 0xd8d8d8, 0x3c3c46, 0xc97b4f];
-const SKINS = [0xe8b98a, 0xc98d5f, 0x8a5a3b, 0xf0c8a0];
+const SHIRTS = [0xd35400, 0x2980b9, 0x27ae60, 0xe74c3c, 0x8e44ad, 0xf1c40f, 0xecf0f1, 0x16a085];
+const SKINS = [0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0xffdbac];
 
-function makePedMesh(rng) {
-  const g = new THREE.Group();
+export function makePedMesh(rng) {
+  const group = new THREE.Group();
   const shirt = pick(rng, SHIRTS);
   const skin = pick(rng, SKINS);
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.55, 0.85, 0.34),
+  const torso = new THREE.Mesh(
+    new THREE.BoxGeometry(0.55, 0.7, 0.32),
     new THREE.MeshLambertMaterial({ color: shirt }),
   );
-  body.position.y = 0.95;
-  g.add(body);
+  torso.position.y = 1.05;
+  group.add(torso);
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.22, 10, 8),
     new THREE.MeshLambertMaterial({ color: skin }),
   );
   head.position.y = 1.62;
-  g.add(head);
-  const legMat = new THREE.MeshLambertMaterial({ color: 0x2e3138 });
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.55, 0.22), legMat);
-  legL.position.set(-0.14, 0.28, 0);
-  g.add(legL);
+  group.add(head);
+  const legMat = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), legMat);
+  legL.position.set(-0.15, 0.35, 0);
+  group.add(legL);
   const legR = legL.clone();
-  legR.position.x = 0.14;
-  g.add(legR);
-  g.userData.legs = [legL, legR];
-  g.userData.head = head;
-  return g;
+  legR.position.x = 0.15;
+  group.add(legR);
+  const armMat = new THREE.MeshLambertMaterial({ color: shirt });
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.55, 0.14), armMat);
+  armL.position.set(-0.36, 1.05, 0);
+  group.add(armL);
+  const armR = armL.clone();
+  armR.position.x = 0.36;
+  group.add(armR);
+  return { group, legL, legR, armL, armR };
 }
 
-export class PedManager {
-  constructor(scene, city, rng, hooks) {
-    this.scene = scene;
-    this.city = city;
-    this.rng = rng;
-    this.hooks = hooks; // { onCrime(kind) }
-    this.peds = [];
-    this.spawnCount = 26;
-  }
+// Sidewalk waypoint: on a road edge, offset 5.5 from a road centre line.
+function sidewalkPoint(rng, city) {
+  const line = city.roadLines[randInt(rng, 0, city.roadLines.length - 1)];
+  const along = randRange(rng, -160, 160);
+  const side = rng() < 0.5 ? -5.5 : 5.5;
+  if (rng() < 0.5) return { x: line + side, z: along };
+  return { x: along, z: line + side };
+}
 
-  spawnAll() {
-    for (let i = 0; i < this.spawnCount; i++) this.spawnOne(true);
-  }
-
-  spawnOne(anywhere) {
-    const rng = this.rng;
-    const p = this.city.randomSidewalkPoint(rng);
+export function createPeds(scene, rng, city, count = 14) {
+  const peds = [];
+  for (let i = 0; i < count; i++) {
     const mesh = makePedMesh(rng);
-    mesh.position.set(p.x, 0, p.z);
-    this.scene.add(mesh);
+    const p = sidewalkPoint(rng, city);
     const ped = {
-      mesh,
-      x: p.x, z: p.z,
-      heading: randRange(rng, 0, Math.PI * 2),
-      speed: randRange(rng, 0.8, 1.6),
-      state: 'walk', // walk | flee | down
-      stateT: 0,
-      walkPhase: randRange(rng, 0, Math.PI * 2),
-      target: null,
+      ...mesh,
+      x: p.x,
+      z: p.z,
+      heading: rng() * Math.PI * 2,
+      speed: randRange(rng, 1.0, 1.9),
+      state: 'walk', // 'walk' | 'flee' | 'down'
+      target: sidewalkPoint(rng, city),
+      downTimer: 0,
+      walkPhase: rng() * Math.PI * 2,
     };
-    this.pickWalkTarget(ped);
-    this.peds.push(ped);
-    return ped;
+    ped.group.position.set(ped.x, 0, ped.z);
+    scene.add(ped.group);
+    peds.push(ped);
   }
+  return peds;
+}
 
-  pickWalkTarget(ped) {
-    // Walk to another sidewalk point a block or two away.
-    const p = this.city.randomSidewalkPoint(this.rng);
-    ped.target = p;
-    ped.heading = Math.atan2(p.x - ped.x, p.z - ped.z);
-  }
-
-  // A car (or the player) hit this ped.
-  knockDown(ped, fromX, fromZ) {
-    if (ped.state === 'down') return;
-    ped.state = 'down';
-    ped.stateT = 0;
-    ped.mesh.rotation.x = -Math.PI / 2;
-    ped.mesh.position.y = 0.25;
-    const dx = ped.x - fromX, dz = ped.z - fromZ;
-    const d = Math.hypot(dx, dz) || 1;
-    ped.x += (dx / d) * 1.5;
-    ped.z += (dz / d) * 1.5;
-    this.hooks.onCrime('hit-ped');
-  }
-
-  scare(x, z, radius) {
-    for (const ped of this.peds) {
-      if (ped.state !== 'walk') continue;
-      const d = Math.hypot(ped.x - x, ped.z - z);
-      if (d < radius) {
-        ped.state = 'flee';
-        ped.stateT = 0;
-        ped.heading = Math.atan2(ped.x - x, ped.z - z);
-        ped.speed = 3.4;
-      }
-    }
-  }
-
-  update(dt, player, cars) {
-    for (const ped of this.peds) {
-      ped.stateT += dt;
-      if (ped.state === 'down') {
-        if (ped.stateT > 14) {
-          // Get up somewhere else and walk on.
-          const p = this.city.randomSidewalkPoint(this.rng);
-          ped.x = p.x; ped.z = p.z;
-          ped.mesh.rotation.x = 0;
-          ped.mesh.position.y = 0;
-          ped.state = 'walk';
-          ped.speed = randRange(this.rng, 0.8, 1.6);
-          this.pickWalkTarget(ped);
-        }
-        continue;
-      }
-      if (ped.state === 'flee' && ped.stateT > 4) {
+export function updatePeds(dt, peds, rng, city, danger) {
+  // danger: {x, z, speed} of the player's car, or null when on foot.
+  for (const ped of peds) {
+    if (ped.state === 'down') {
+      ped.downTimer -= dt;
+      if (ped.downTimer <= 0) {
         ped.state = 'walk';
-        ped.speed = randRange(this.rng, 0.8, 1.6);
-        this.pickWalkTarget(ped);
+        ped.group.rotation.set(0, ped.heading, 0);
+        ped.target = sidewalkPoint(rng, city);
       }
-      // Step toward the walk target; pick a new one on arrival.
-      const tx = ped.target ? ped.target.x : ped.x;
-      const tz = ped.target ? ped.target.z : ped.z;
-      const dx = tx - ped.x, dz = tz - ped.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 1.2) {
-        this.pickWalkTarget(ped);
+      continue;
+    }
+    // Flee a fast car nearby.
+    let fleeing = false;
+    if (danger && danger.speed > 7) {
+      const d = dist(ped.x, ped.z, danger.x, danger.z);
+      if (d < 9) {
+        fleeing = true;
+        ped.state = 'flee';
+        ped.heading = Math.atan2(ped.z - danger.z, ped.x - danger.x);
+      }
+    }
+    if (!fleeing && ped.state === 'flee') ped.state = 'walk';
+    const speed = ped.state === 'flee' ? 4.2 : ped.speed;
+    if (ped.state === 'walk') {
+      const dx = ped.target.x - ped.x;
+      const dz = ped.target.z - ped.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < 1.5) {
+        ped.target = sidewalkPoint(rng, city);
       } else {
-        const want = Math.atan2(dx, dz);
-        let dh = want - ped.heading;
-        while (dh > Math.PI) dh -= Math.PI * 2;
-        while (dh < -Math.PI) dh += Math.PI * 2;
-        ped.heading += clamp(dh, -2.2 * dt, 2.2 * dt);
-        ped.x += Math.sin(ped.heading) * ped.speed * dt;
-        ped.z += Math.cos(ped.heading) * ped.speed * dt;
-      }
-      // A fast car nearby makes peds scatter.
-      if (player.inCar && player.carSpeed > 6) {
-        const d = Math.hypot(ped.x - player.x, ped.z - player.z);
-        if (d < 7) this.scare(player.x, player.z, 8);
-      }
-      // Walk-cycle leg swing.
-      ped.walkPhase += dt * ped.speed * 5;
-      const swing = Math.sin(ped.walkPhase) * 0.45;
-      ped.mesh.userData.legs[0].rotation.x = swing;
-      ped.mesh.userData.legs[1].rotation.x = -swing;
-      ped.mesh.position.set(ped.x, 0, ped.z);
-      ped.mesh.rotation.y = ped.heading;
-    }
-    // Player car running a ped over.
-    if (player.inCar && Math.abs(player.carSpeed) > 3) {
-      for (const ped of this.peds) {
-        if (ped.state === 'down') continue;
-        const d = Math.hypot(ped.x - player.x, ped.z - player.z);
-        if (d < 1.6) this.knockDown(ped, player.x, player.z);
+        ped.heading = Math.atan2(dz, dx);
       }
     }
+    ped.x += Math.cos(ped.heading) * speed * dt;
+    ped.z += Math.sin(ped.heading) * speed * dt;
+    ped.x = Math.max(-170, Math.min(170, ped.x));
+    ped.z = Math.max(-170, Math.min(170, ped.z));
+    ped.group.position.set(ped.x, 0, ped.z);
+    ped.group.rotation.y = -ped.heading + Math.PI / 2;
+    // Walk cycle: swing legs and arms.
+    ped.walkPhase += dt * speed * 4.5;
+    const swing = Math.sin(ped.walkPhase) * 0.45;
+    ped.legL.rotation.x = swing;
+    ped.legR.rotation.x = -swing;
+    ped.armL.rotation.x = -swing * 0.7;
+    ped.armR.rotation.x = swing * 0.7;
   }
+}
 
-  // Nearest standing ped within range of a point (for punching / shooting).
-  nearest(x, z, range) {
-    let best = null, bd = range;
-    for (const ped of this.peds) {
-      if (ped.state === 'down') continue;
-      const d = Math.hypot(ped.x - x, ped.z - z);
-      if (d < bd) { bd = d; best = ped; }
+// Knock down every standing ped within `radius` of (x, z). Returns how many.
+export function knockDownPeds(peds, x, z, radius) {
+  let n = 0;
+  for (const ped of peds) {
+    if (ped.state === 'down') continue;
+    if (dist(ped.x, ped.z, x, z) <= radius) {
+      ped.state = 'down';
+      ped.downTimer = 9;
+      ped.group.rotation.set(0, ped.heading, Math.PI / 2);
+      n++;
     }
-    return best;
   }
+  return n;
+}
+
+// Nearest standing ped to (x, z) within maxDist, or null.
+export function nearestPed(peds, x, z, maxDist) {
+  let best = null;
+  let bd = maxDist;
+  for (const ped of peds) {
+    if (ped.state === 'down') continue;
+    const d = dist(ped.x, ped.z, x, z);
+    if (d < bd) { bd = d; best = ped; }
+  }
+  return best;
 }
