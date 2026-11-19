@@ -1,58 +1,47 @@
-// Solmar Bay entrypoint (node22, stdlib only).
+// Solmar Bay — make.fun entrypoint (Node 22, standard library only).
 // Copies game/ and screenshots/ next to this file into $MAKEFUN_OUTPUT_DIR
-// (default /output), then writes /output/dossier.json with the starter kit's
-// buildDossier, so the grader can score the game from the dossier alone.
-import { cpSync, existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
+// (default /output) and writes /output/dossier.json from the starter kit's
+// buildDossier, so the scorer can verify the game and its screenshots.
+// Fails fast with a plain message when an input is missing, so a bad run
+// is obvious before anything is copied.
+
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const outDir: string = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
-const root: string = dirname(fileURLToPath(import.meta.url));
+const here = dirname(fileURLToPath(import.meta.url));
+const out = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
 
-// Pre-flight: the entry is not submittable without the game and its renders.
-// Fail here with a plain message instead of a deep DossierError later.
-const gameDir = join(root, 'game');
-const shotsDir = join(root, 'screenshots');
-if (!existsSync(gameDir)) {
-  throw new Error(`Solmar Bay: game/ is missing next to main.ts (${gameDir})`);
-}
-if (!existsSync(shotsDir)) {
-  throw new Error(`Solmar Bay: screenshots/ is missing next to main.ts (${shotsDir}) — capture ?shot=1..4 first`);
-}
-const shotFiles = readdirSync(shotsDir).filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f));
-if (shotFiles.length < 3 || shotFiles.length > 4) {
-  throw new Error(`Solmar Bay: screenshots/ must hold 3 or 4 renders, found ${shotFiles.length}`);
+function fail(msg) {
+  console.error('main.ts: ' + msg);
+  process.exit(1);
 }
 
-mkdirSync(outDir, { recursive: true });
+// Pre-flight: both inputs must exist, and screenshots/ must hold at least
+// one image (the first is the cover) or buildDossier refuses the dossier.
+for (const name of ['game', 'screenshots']) {
+  if (!existsSync(join(here, name))) fail('missing input directory: ' + join(here, name));
+}
+const shots = readdirSync(join(here, 'screenshots')).filter((f) => /\.(jpe?g|png|webp)$/i.test(f));
+if (shots.length === 0) fail('screenshots/ holds no image: take the four shots first (see shots.json)');
+
+mkdirSync(out, { recursive: true });
 
 for (const name of ['game', 'screenshots']) {
-  const src = join(root, name);
-  if (existsSync(src)) {
-    cpSync(src, join(outDir, name), { recursive: true });
-  }
+  cpSync(join(here, name), join(out, name), { recursive: true });
 }
 
-const dossier = buildDossier(outDir, {
+const dossier = buildDossier(out, {
   text_max_bytes: 163840,
   screenshots: { max: 4, max_bytes: 262144 },
   game_max_files: 993,
   game_max_bytes: 50331648,
   game_path_max_bytes: 1000,
 });
-const dossierPath = join(outDir, 'dossier.json');
+
+const dossierPath = join(out, 'dossier.json');
 writeFileSync(dossierPath, dossier);
-
-// Post-write check: the dossier must be readable JSON, or the run is broken.
-const parsed = JSON.parse(readFileSync(dossierPath, 'utf8'));
-if (typeof parsed !== 'object' || parsed === null || !('schema' in parsed)) {
-  throw new Error('Solmar Bay: dossier.json did not parse into a dossier object');
-}
-const dossierBytes = statSync(dossierPath).size;
-
-const gameFiles = readdirSync(join(outDir, 'game'), { recursive: true }).length;
-const shots = existsSync(join(outDir, 'screenshots'))
-  ? readdirSync(join(outDir, 'screenshots')).length
-  : 0;
-console.log(`Solmar Bay: copied ${gameFiles} game entries and ${shots} screenshots to ${outDir}; dossier.json written (${dossierBytes} bytes, schema ${parsed.schema}).`);
+console.log('Solmar Bay: wrote ' + dossierPath);
+console.log('  screenshots: ' + shots.length + ' (' + shots.join(', ') + ')');
+console.log('  dossier bytes: ' + statSync(dossierPath).size);

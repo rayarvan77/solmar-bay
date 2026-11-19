@@ -1,15 +1,15 @@
-// Tiny static server for play-testing Solmar Bay locally.
-// Serves game/ at http://127.0.0.1:8080/ with correct MIME types and a
-// path-traversal guard. Node 22 stdlib only.
+// Solmar Bay — tiny static server for local play-testing.
+// Serves only files under game/ on 127.0.0.1:8080, with correct MIME types
+// and a path-traversal guard. Not part of the shipped game.
+
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
-import { dirname, join, resolve, extname } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root: string = join(dirname(fileURLToPath(import.meta.url)), 'game');
-const PORT = 8080;
+const root = resolve(join(fileURLToPath(new URL('.', import.meta.url)), 'game'));
 
-const MIME: Record<string, string> = {
+const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
@@ -19,38 +19,28 @@ const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
 };
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   try {
-    const url = new URL(req.url || '/', 'http://127.0.0.1');
-    let rel = decodeURIComponent(url.pathname);
-    if (rel === '/') rel = '/index.html';
-    const file = resolve(join(root, rel));
-    // Path-traversal guard: the resolved file must stay inside game/.
-    if (!file.startsWith(root + '/') && file !== root) {
+    const url = new URL(req.url || '/', 'http://127.0.0.1:8080');
+    let path = decodeURIComponent(url.pathname);
+    if (path === '/') path = '/index.html';
+    const file = resolve(join(root, normalize(path)));
+    if (!file.startsWith(root + sep)) {
       res.writeHead(403, { 'content-type': 'text/plain' });
       res.end('forbidden');
       return;
     }
-    if (!existsSync(file) || !statSync(file).isFile()) {
-      res.writeHead(404, { 'content-type': 'text/plain' });
-      res.end('not found');
-      return;
-    }
-    const body = readFileSync(file);
-    res.writeHead(200, {
-      'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream',
-      'content-length': body.length,
-    });
-    res.end(body);
-  } catch (err) {
-    res.writeHead(500, { 'content-type': 'text/plain' });
-    res.end('server error');
+    const data = await readFile(file);
+    res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream' });
+    res.end(data);
+  } catch (e) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('not found');
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Solmar Bay dev server: http://127.0.0.1:${PORT}/`);
+server.listen(8080, '127.0.0.1', () => {
+  console.log('Solmar Bay dev server: http://127.0.0.1:8080/');
 });

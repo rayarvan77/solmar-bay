@@ -1,123 +1,117 @@
-// Police for Solmar Bay: cruisers that spawn with the wanted level,
-// chase the player, and bust them if they get caught standing still.
+// Solmar Bay — police: pursuit cars that spawn at the map edge, steer
+// towards the player, and try to ram them to a stop. Higher wanted levels
+// mean more cars, faster cars and harder ramming. When a cop gets close
+// and slow for long enough while the player is on foot or crawling, the
+// player is busted.
+
 import * as THREE from '../vendor/three.module.min.js';
-import { clamp, turnToward, dist } from './util.js';
-import { makePoliceCarMesh } from './vehicles.js';
+import { Car } from './vehicles.js';
+import { collideCircle, CITY } from './city.js';
+import { clamp, turnTowards } from './util.js';
 
-function targetCountFor(wanted) {
-  if (wanted <= 0) return 0;
-  if (wanted === 1) return 1;
-  if (wanted === 2) return 2;
-  if (wanted === 3) return 2;
-  if (wanted === 4) return 3;
-  return 4;
-}
-
-export function createPolice(scene, rng, city) {
-  const mgr = {
-    cars: [],
-    bustTimer: 0,
-    farTimer: 0,
-    spawnCooldown: 0,
-  };
-
-  function spawnOne(playerPos) {
-    const mesh = makePoliceCarMesh();
-    // Spawn at an intersection at least 55 units from the player.
-    let inter = city.randomIntersection(rng);
-    let tries = 0;
-    while (dist(inter.x, inter.z, playerPos.x, playerPos.z) < 55 && tries < 12) {
-      inter = city.randomIntersection(rng);
-      tries++;
-    }
-    const car = {
-      ...mesh,
-      x: inter.x,
-      z: inter.z,
-      heading: rng() * Math.PI * 2,
-      speed: 0,
-      awayTime: 0,
-    };
-    car.group.position.set(car.x, 0, car.z);
-    scene.add(car.group);
-    mgr.cars.push(car);
-    return car;
+export class PoliceForce {
+  constructor(scene, colliders) {
+    this.scene = scene;
+    this.colliders = colliders;
+    this.cars = [];
+    this.bustTimer = 0;
+    this.spawnTimer = 0;
+    this.flashTime = 0;
   }
 
-  function removeCar(car) {
-    scene.remove(car.group);
-    const i = mgr.cars.indexOf(car);
-    if (i >= 0) mgr.cars.splice(i, 1);
+  // How many pursuit cars the current wanted level calls for.
+  wantedCount(wanted) {
+    return wanted <= 0 ? 0 : Math.min(1 + wanted, 6);
   }
 
-  // dt seconds; player: {x, z, speed, inCar}; wanted: 0..5.
-  // events: {onBusted, onRam} callbacks.
-  mgr.update = function (dt, player, wanted, events, time) {
-    const want = targetCountFor(wanted);
-    mgr.spawnCooldown -= dt;
-    while (mgr.cars.length < want && mgr.spawnCooldown <= 0) {
-      spawnOne(player);
-      mgr.spawnCooldown = 1.2;
+  update(dt, playerPos, playerSpeed, wanted, onBusted, onRam) {
+    this.flashTime += dt;
+    const want = this.wantedCount(wanted);
+    this.spawnTimer -= dt;
+    if (this.cars.length < want && this.spawnTimer <= 0) {
+      this.spawnTimer = 2.5;
+      this.spawnPolice(playerPos);
     }
-    while (mgr.cars.length > want) {
-      removeCar(mgr.cars[mgr.cars.length - 1]);
+    if (this.cars.length > want) {
+      // Wanted dropped: the furthest cop gives up and drives away.
+      let far = null;
+      let farD = -1;
+      for (const c of this.cars) {
+        const d = Math.hypot(c.pos.x - playerPos.x, c.pos.z - playerPos.z);
+        if (d > farD) {
+          farD = d;
+          far = c;
+        }
+      }
+      if (far) this.removeCar(far);
     }
-    const maxSpeed = 19 + wanted * 3.2;
-    for (const car of [...mgr.cars]) {
-      const d = dist(car.x, car.z, player.x, player.z);
-      // Despawn a cruiser that lost the player far away for a while.
-      if (d > 130) {
-        car.awayTime += dt;
-        if (car.awayTime > 7) { removeCar(car); continue; }
+
+    const sirenPhase = Math.floor(this.flashTime * 4) % 2 === 0;
+    for (const car of this.cars) {
+      // Steer towards the player with a little prediction.
+      const px = playerPos.x + Math.sin(playerPos.heading || 0) * (playerSpeed || 0) * 0.4;
+      const pz = playerPos.z + Math.cos(playerPos.heading || 0) * (playerSpeed || 0) * 0.4;
+      const targetHeading = Math.atan2(px - car.pos.x, pz - car.pos.z);
+      const maxTurn = 2.4 * dt;
+      car.heading = turnTowards(car.heading, targetHeading, maxTurn);
+      const topSpeed = 13 + wanted * 2.6;
+      car.speed += (topSpeed - car.speed) * Math.min(1, dt * 0.9);
+      const beforeX = car.pos.x;
+      const beforeZ = car.pos.z;
+      car.pos.x += Math.sin(car.heading) * car.speed * dt;
+      car.pos.z += Math.cos(car.heading) * car.speed * dt;
+      // Slide along buildings instead of sticking inside them.
+      const probe = { x: car.pos.x, z: car.pos.z };
+      if (collideCircle(this.colliders, probe, car.radius)) {
+        car.pos.x = probe.x;
+        car.pos.z = probe.z;
+        car.speed *= 0.6;
+      }
+      // Ram check: a hard hit on the player.
+      const d = Math.hypot(car.pos.x - playerPos.x, car.pos.z - playerPos.z);
+      if (d < 2.6 && car.speed > 8) {
+        if (onRam) onRam(car.speed);
+        car.speed *= 0.35;
+      }
+      // Busted: a cop sitting on the player while the player is slow.
+      if (d < 3.4 && Math.abs(playerSpeed || 0) < 2.5) {
+        this.bustTimer += dt;
+        if (this.bustTimer > 2.2 && onBusted) {
+          onBusted();
+          this.bustTimer = 0;
+        }
       } else {
-        car.awayTime = 0;
+        this.bustTimer = Math.max(0, this.bustTimer - dt * 2);
       }
-      // Steer toward the player and accelerate.
-      const targetHeading = Math.atan2(player.z - car.z, player.x - car.x);
-      car.heading = turnToward(car.heading, targetHeading, 2.6 * dt);
-      car.speed = Math.min(car.speed + 12 * dt, maxSpeed);
-      const nx = car.x + Math.cos(car.heading) * car.speed * dt;
-      const nz = car.z + Math.sin(car.heading) * car.speed * dt;
-      let blocked = false;
-      if (city.collides(nx, car.z, 1.5)) blocked = true;
-      else car.x = nx;
-      if (city.collides(car.x, nz, 1.5)) blocked = true;
-      else car.z = nz;
-      if (blocked) car.speed *= 0.4;
-      car.group.position.set(car.x, 0, car.z);
-      car.group.rotation.y = -car.heading + Math.PI / 2;
-      const spin = (car.speed * dt) / 0.38;
-      for (const w of car.wheels) w.rotation.x += spin;
-      // Flashing light bar.
-      const phase = Math.floor(time * 6) % 2 === 0;
-      car.lights.redMat.emissive.setHex(phase ? 0xff0000 : 0x330000);
-      car.lights.blueMat.emissive.setHex(phase ? 0x000033 : 0x0022ff);
-      // Ram the player on foot.
-      if (!player.inCar && d < 2.6 && car.speed > 4) {
-        events.onRam && events.onRam();
-        car.speed *= 0.3;
-      }
+      car.syncMesh();
+      // Flash the light bar.
+      const red = car.mesh.getObjectByName('sirenRed');
+      const blue = car.mesh.getObjectByName('sirenBlue');
+      if (red) red.visible = sirenPhase;
+      if (blue) blue.visible = !sirenPhase;
     }
-    // Bust: a cruiser sits on a slow player.
-    const nearest = mgr.cars.length
-      ? Math.min(...mgr.cars.map((c) => dist(c.x, c.z, player.x, player.z)))
-      : Infinity;
-    if (wanted > 0 && nearest < 4 && player.speed < 3.5) {
-      mgr.bustTimer += dt;
-      if (mgr.bustTimer > 2.5) {
-        mgr.bustTimer = 0;
-        events.onBusted && events.onBusted();
-      }
-    } else {
-      mgr.bustTimer = Math.max(0, mgr.bustTimer - dt * 2);
-    }
-    return mgr.cars;
-  };
+  }
 
-  mgr.clear = function () {
-    for (const car of [...mgr.cars]) removeCar(car);
-    mgr.bustTimer = 0;
-  };
+  spawnPolice(playerPos) {
+    // Spawn at a road on the far side of the map from the player.
+    const angle = Math.atan2(playerPos.x, playerPos.z) + Math.PI + (Math.random() - 0.5) * 1.2;
+    const r = CITY.half - 12;
+    const x = clamp(Math.sin(angle) * r, -CITY.half, CITY.half);
+    const z = clamp(Math.cos(angle) * r, -CITY.half, CITY.half);
+    const heading = Math.atan2(playerPos.x - x, playerPos.z - z);
+    const car = new Car(this.scene, x, z, heading, 0xe8e8e8, true);
+    car.speed = 8;
+    this.cars.push(car);
+  }
 
-  return mgr;
+  removeCar(car) {
+    this.scene.remove(car.mesh);
+    const i = this.cars.indexOf(car);
+    if (i >= 0) this.cars.splice(i, 1);
+  }
+
+  clear() {
+    for (const car of [...this.cars]) this.removeCar(car);
+    this.bustTimer = 0;
+  }
 }

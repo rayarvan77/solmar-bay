@@ -1,5 +1,8 @@
-// Seeded RNG and small math helpers for Solmar Bay.
-// Everything deterministic: the same seed always builds the same city.
+// Solmar Bay — small shared helpers: seeded RNG, math and geometry bits.
+// Everything in the game that must be reproducible uses mulberry32 with a
+// fixed seed; live gameplay randomness uses Math.random and never affects
+// the deterministic screenshot scenes.
+
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -11,52 +14,61 @@ export function mulberry32(seed) {
   };
 }
 
-export function clamp(v, a, b) {
-  return v < a ? a : v > b ? b : v;
+export function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
 }
 
 export function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-export function randRange(rng, a, b) {
-  return a + rng() * (b - a);
-}
-
-export function randInt(rng, a, b) {
-  return a + Math.floor(rng() * (b - a + 1));
-}
-
-export function pick(rng, arr) {
-  return arr[Math.floor(rng() * arr.length)];
-}
-
-export function dist2(ax, az, bx, bz) {
-  const dx = ax - bx;
-  const dz = az - bz;
-  return dx * dx + dz * dz;
-}
-
-export function dist(ax, az, bx, bz) {
-  return Math.sqrt(dist2(ax, az, bx, bz));
-}
-
-// Shortest signed angle difference from `from` to `to`, in (-PI, PI].
-export function angleDiff(from, to) {
-  let d = (to - from) % (Math.PI * 2);
+// Shortest signed turn from angle a towards angle b, in radians.
+export function angleDelta(a, b) {
+  let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
-  if (d <= -Math.PI) d += Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
   return d;
 }
 
-// Turn `current` toward `target` by at most `maxStep` radians.
-export function turnToward(current, target, maxStep) {
-  const d = angleDiff(current, target);
+export function turnTowards(current, target, maxStep) {
+  const d = angleDelta(current, target);
   if (Math.abs(d) <= maxStep) return target;
   return current + Math.sign(d) * maxStep;
 }
 
-// Heading (radians, 0 = +X, PI/2 = +Z) from a 2D direction.
-export function headingOf(dx, dz) {
-  return Math.atan2(dz, dx);
+// Distance from point (px, pz) to the segment (ax, az)-(bx, bz).
+export function distToSegment(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  let t = len2 === 0 ? 0 : ((px - ax) * dx + (pz - az) * dz) / len2;
+  t = clamp(t, 0, 1);
+  const cx = ax + t * dx;
+  const cz = az + t * dz;
+  return Math.hypot(px - cx, pz - cz);
+}
+
+// Pick one item from an array using a seeded rng.
+export function pick(rng, arr) {
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+// A soft, deterministic hash of a string into [0, 1).
+export function hash01(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+export function formatMoney(n) {
+  return '$' + Math.floor(n).toLocaleString('en-US');
+}
+
+export function formatTime(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  const m = Math.floor(s / 60);
+  return m + ':' + String(s % 60).padStart(2, '0');
 }

@@ -1,115 +1,140 @@
-// Deterministic screenshot scenes for Solmar Bay (?shot=1..4).
-// Each shot places the player, cars and police at fixed positions and
-// parks the camera, so the four screenshots are reproducible.
+// Solmar Bay — deterministic screenshot scenes. `?shot=1..4` freezes the
+// game into a fixed, staged tableau and parks the camera, so the four
+// dossier screenshots are reproducible: no live input, no random AI state,
+// no timers running. main.js calls setupShot() once after the world loads
+// and then just renders.
+
 import * as THREE from '../vendor/three.module.min.js';
 
-export const SHOTS = [
-  { id: 1, name: 'start', title: 'Welcome to Solmar Bay', description: 'Opening view over the city, player on foot by the kerb.' },
-  { id: 2, name: 'play', title: 'On the road', description: 'Driving east down the main avenue.' },
-  { id: 3, name: 'chase', title: 'Heat on your tail', description: 'Two cruisers in pursuit at wanted level 3.' },
-  { id: 4, name: 'mission', title: "Dana Vega's job", description: 'At the mission beacon for the first job.' },
-];
+export const SHOT_NAMES = {
+  1: 'start',
+  2: 'play',
+  3: 'chase',
+  4: 'mission',
+};
 
-function setFixedCam(world, px, py, pz, tx, ty, tz) {
-  world.cameraMode = 'fixed';
-  world.fixedCam = {
-    position: new THREE.Vector3(px, py, pz),
-    target: new THREE.Vector3(tx, ty, tz),
-  };
+// Park the camera at a fixed position looking at a fixed target.
+function parkCamera(camera, x, y, z, tx, ty, tz) {
+  camera.position.set(x, y, z);
+  camera.lookAt(tx, ty, tz);
 }
 
-export function applyShot(id, world) {
-  const G = world;
-  if (id === 1) {
-    // Opening: high view over the city centre, player on foot.
-    G.inCar = false;
-    G.playerCar = null;
-    G.player.x = 8;
-    G.player.z = 0;
-    G.player.heading = Math.PI / 4;
-    G.player.mesh.position.set(8, 0, 0);
-    G.player.mesh.rotation.y = -G.player.heading + Math.PI / 2;
-    G.wanted = 0;
-    G.money = 250;
-    G.health = 100;
-    G.speedKmh = 0;
-    G.objectiveOverride = 'Welcome to Solmar Bay — steal a car and start mission 1.';
-    setFixedCam(G, 72, 58, 72, 0, 0, 0);
-    return;
+export function setupShot(shot, world) {
+  const { camera, player, cars, peds, police, missions, hud, renderer } = world;
+  const playerPos = player.pos;
+  const setPlayer = (x, z, heading) => {
+    playerPos.x = x;
+    playerPos.z = z;
+    player.heading = heading;
+    player.mesh.rotation.y = heading;
+    player.mesh.position.set(x, 0, z);
+    player.inCar = false;
+  };
+
+  if (shot === 1) {
+    // Start screen: the player on the north road looking into the city,
+    // title overlay up. Camera and player both on the road so no building
+    // ever blocks the view; the camera sits high and level so the sky and
+    // towers show above the overlay, and the player stands left of centre
+    // where the button does not hide them.
+    setPlayer(-19, -142, 0.3);
+    parkCamera(camera, -12, 6, -126, -17, 3, -160);
+    hud.showStart();
+    hud.setObjective('Five jobs. One city. Don\'t get caught.');
+    hud.setMoney(150);
+    hud.setWanted(0);
+    hud.setHealth(100);
+    return { label: 'start', hint: 'title screen over the city' };
   }
-  if (id === 2) {
-    // Driving: player in a car heading east on the avenue z = 0.
-    const car = G.parkedCars[0];
-    car.x = -40;
-    car.z = 0;
+
+  if (shot === 2) {
+    // Driving: the player mid-drive down a long avenue, traffic ahead,
+    // chase camera behind the car. Everything sits on road x = -15.
+    const car = cars.traffic[0];
+    const px = -15;
+    const pz = -60;
+    car.pos.x = px;
+    car.pos.z = pz;
+    car.heading = 0;
+    car.speed = 16;
+    car.syncMesh();
+    player.inCar = car;
+    player.pos.x = px;
+    player.pos.z = pz;
+    player.heading = 0;
+    parkCamera(camera, px, 5.5, pz - 13, px, 2, pz + 12);
+    hud.hideStart();
+    hud.setObjective('Cruise Solmar Bay — steal a car, take a job, stay free.');
+    hud.setMoney(350);
+    hud.setWanted(0);
+    hud.setHealth(100);
+    hud.setSpeed(16 * 3.6, true);
+    return { label: 'play', hint: 'driving down the avenue' };
+  }
+
+  if (shot === 3) {
+    // Police chase: the player speeding away with two pursuit cars on
+    // their bumper, sirens flashing, wanted stars up. All on road x = -15.
+    const car = cars.traffic[1];
+    const px = -15;
+    const pz = 20;
+    car.pos.x = px;
+    car.pos.z = pz;
     car.heading = 0;
     car.speed = 22;
-    car.group.position.set(-40, 0, 0);
-    car.group.rotation.y = -car.heading + Math.PI / 2;
-    G.playerCar = car;
-    G.inCar = true;
-    G.player.mesh.visible = false;
-    G.wanted = 0;
-    G.money = 250;
-    G.health = 100;
-    G.speedKmh = 79;
-    G.objectiveOverride = '1. First Wheels — Get a car and drive to the yellow marker.';
-    // Camera stays inside the road corridor (z near 0) so no building blocks it.
-    setFixedCam(G, -58, 6.5, -3.5, -26, 1.5, 0);
-    return;
-  }
-  if (id === 3) {
-    // Chase: player car northbound, two cruisers right behind, wanted 3.
-    const car = G.parkedCars[0];
-    car.x = 0;
-    car.z = 32;
-    car.heading = Math.PI / 2;
-    car.speed = 26;
-    car.group.position.set(0, 0, 32);
-    car.group.rotation.y = -car.heading + Math.PI / 2;
-    G.playerCar = car;
-    G.inCar = true;
-    G.player.mesh.visible = false;
-    G.wanted = 3;
-    G.money = 250;
-    G.health = 100;
-    G.speedKmh = 94;
-    G.objectiveOverride = 'WANTED 3 — lose the cruisers!';
-    // Spawn two cruisers, then park them on the player's tail.
-    const p = { x: 0, z: 32, speed: 26, inCar: true };
-    G.police.update(1.5, p, 3, {}, 1.0);
-    G.police.update(1.3, p, 3, {}, 2.3);
-    const spots = [{ x: 2, z: 16 }, { x: -3, z: 8 }];
-    G.police.cars.forEach((c, i) => {
-      const s = spots[i % spots.length];
-      c.x = s.x;
-      c.z = s.z;
-      c.heading = Math.PI / 2;
-      c.speed = 27;
-      c.group.position.set(c.x, 0, c.z);
-      c.group.rotation.y = -c.heading + Math.PI / 2;
+    car.syncMesh();
+    player.inCar = car;
+    player.pos.x = px;
+    player.pos.z = pz;
+    player.heading = 0;
+    police.spawnPolice({ x: px, z: pz, heading: 0 });
+    police.spawnPolice({ x: px, z: pz, heading: 0 });
+    const tailSpots = [[px - 2, pz - 12], [px + 2, pz - 8]];
+    police.cars.forEach((c, i) => {
+      c.pos.x = tailSpots[i][0];
+      c.pos.z = tailSpots[i][1];
+      c.speed = 20;
+      c.heading = 0;
+      c.syncMesh();
     });
-    // Camera on the road itself (x near 0), looking north up the chase:
-    // police in the foreground, player car ahead. Pulled back so the
-    // nearest cruiser is fully in frame.
-    setFixedCam(G, 1, 9, 0, 0, 1.5, 32);
-    return;
+    parkCamera(camera, px, 6.5, pz - 18, px, 2, pz + 12);
+    hud.hideStart();
+    hud.setObjective('Lose the Heat — shake the cops!');
+    hud.setMoney(900);
+    hud.setWanted(3);
+    hud.setHealth(72);
+    hud.setSpeed(22 * 3.6, true);
+    hud.centerMessage('WANTED ★★★ — lose them!');
+    return { label: 'chase', hint: 'police pursuit' };
   }
-  // Shot 4: at the mission beacon for mission 1 (target 96, -64).
-  const car = G.parkedCars[0];
-  car.x = 82;
-  car.z = -64;
-  car.heading = 0;
-  car.speed = 0;
-  car.group.position.set(82, 0, -64);
-  car.group.rotation.y = -car.heading + Math.PI / 2;
-  G.playerCar = car;
-  G.inCar = true;
-  G.player.mesh.visible = false;
-  G.wanted = 1;
-  G.money = 450;
-  G.health = 100;
-  G.speedKmh = 0;
-  G.objectiveOverride = '1. First Wheels — Get a car and drive to the yellow marker.';
-  setFixedCam(G, 116, 17, -42, 94, 2, -64);
+
+  // Shot 4: a mission moment — the player on foot at the gold beacon with
+  // Dana Vega's objective on screen. Player, beacon and camera all on
+  // road x = -15 so the street frames the shot.
+  setPlayer(-15, -92, 0);
+  missions.marker.position.set(-15, 0, -84);
+  missions.marker.visible = true;
+  parkCamera(camera, -15, 4.5, -104, -15, 2, -82);
+  hud.hideStart();
+  hud.setObjective('The Big Score — Grab the cash, then reach the safehouse.');
+  hud.setMoney(1400);
+  hud.setWanted(1);
+  hud.setHealth(100);
+  hud.centerMessage('Dana Vega: "One last job, kid."');
+  // A couple of peds nearby so the street feels alive.
+  peds[0].pos.x = -9;
+  peds[0].pos.z = -86;
+  peds[1].pos.x = -21;
+  peds[1].pos.z = -88;
+  return { label: 'mission', hint: 'at the mission beacon' };
+}
+
+// Render one frame and report whether the canvas actually drew anything.
+// Used by the screenshot harness to confirm the scene is alive.
+export function renderOnce(renderer, scene, camera) {
+  renderer.render(scene, camera);
+  const gl = renderer.getContext();
+  const pixels = new Uint8Array(4);
+  gl.readPixels(2, 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  return pixels[0] + pixels[1] + pixels[2] > 0;
 }
