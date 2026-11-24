@@ -5,9 +5,9 @@
 
 import * as THREE from '../vendor/three.module.min.js';
 import { clampToMap, roadLines } from './city.js';
-import { clamp as clampNum } from './util.js';
+import { clamp as clampNum, randRange } from './util.js';
 
-const CAR_COLORS = [0xc23b2e, 0x2e6ac2, 0xd8a020, 0x3a9a5a, 0x7a4a9a, 0xc0c8d0, 0x22262c, 0x8a5a2a];
+const CAR_COLORS = [0xc23b2e, 0x2e6ac2, 0xd8a020, 0x3a9a5a, 0x7a4a9a, 0xc0c8d0, 0x22262c, 0x8a5a2a, 0xe86a2a, 0x2a9a8a]; // last two: sunset orange + bay teal, round 3 palette
 
 export function makeCarMesh(color, police = false) {
   const group = new THREE.Group();
@@ -163,6 +163,12 @@ export function spawnTraffic(scene, count, colliders, rng) {
     car.line = line;
     car.dir = dir;
     car.speed = car.cruise * (0.7 + rng() * 0.6);
+    // Beachfront cruisers: about one car in seven takes it slow along the
+    // bayfront roads, golden-hour traffic instead of commuter traffic.
+    if (rng() < 0.15) {
+      car.cruise = randRange(rng, 5, 7);
+      car.speed = car.cruise;
+    }
     cars.push(car);
   }
   return cars;

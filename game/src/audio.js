@@ -1,7 +1,8 @@
 // Solmar Bay — synthesized sound: no audio files, everything is built
 // from WebAudio oscillators and filtered noise. The engine hum follows the
 // car's speed, the siren wails in two tones, and one-shots cover pickups,
-// gunshots, crashes and mission chimes. Audio only starts after a user
+// gunshots, crashes and mission chimes — each chime now answered by a
+// dispatch radio chirp (round 3). Audio only starts after a user
 // gesture (a click or keypress); screenshot mode never initialises it.
 
 export class SoundBank {
@@ -97,10 +98,19 @@ export class SoundBank {
     osc.stop(t + dur + 0.02);
   }
 
-  // Two-note mission chime.
+  // Two-note mission chime, answered by a police-radio chirp: the
+  // dispatch squelch that plays whenever a job wraps up in round 3.
   chime() {
     this.blip(660, 0.14, 0.28);
     setTimeout(() => this.blip(990, 0.22, 0.28), 130);
+    setTimeout(() => this.radioChirp(), 380);
+  }
+
+  // Dispatch radio squelch: two short high blips, like a radio keying up
+  // before the dispatcher speaks. Used after the mission chime.
+  radioChirp() {
+    this.blip(1250, 0.06, 0.18);
+    setTimeout(() => this.blip(950, 0.08, 0.18), 90);
   }
 
   // Gunshot: a burst of white noise through a high-pass.

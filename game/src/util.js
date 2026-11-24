@@ -53,6 +53,13 @@ export function pick(rng, arr) {
   return arr[Math.floor(rng() * arr.length)];
 }
 
+// A seeded float in [min, max): the one-liner every spawn helper needs
+// (beach strollers in peds.js, slow cruisers in vehicles.js) so the
+// range math is written once and stays deterministic.
+export function randRange(rng, min, max) {
+  return min + rng() * (max - min);
+}
+
 // A soft, deterministic hash of a string into [0, 1).
 export function hash01(str) {
   let h = 2166136261;

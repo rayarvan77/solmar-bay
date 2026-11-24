@@ -45,3 +45,6 @@ writeFileSync(dossierPath, dossier);
 console.log('Solmar Bay: wrote ' + dossierPath);
 console.log('  screenshots: ' + shots.length + ' (' + shots.join(', ') + ')');
 console.log('  dossier bytes: ' + statSync(dossierPath).size);
+// Round 3 dossier (24 Nov 2026): golden-hour art pass, bay + sunset,
+// police roadblock + dispatch banner, 8 missions, all-file touch-ups.
+console.log('  round 3: golden-hour art pass, bay + sunset, roadblock + dispatch, 8 missions');

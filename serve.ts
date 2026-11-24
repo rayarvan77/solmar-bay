@@ -43,4 +43,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(8080, '127.0.0.1', () => {
   console.log('Solmar Bay dev server: http://127.0.0.1:8080/');
+  console.log('  shots: ?shot=1..4 (see shots.json); serving game/ only');
 });

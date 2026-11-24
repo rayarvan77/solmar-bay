@@ -5,7 +5,7 @@
 
 import * as THREE from '../vendor/three.module.min.js';
 import { blockCentres, CITY } from './city.js';
-import { clamp } from './util.js';
+import { clamp, randRange } from './util.js';
 
 const SHIRTS = [0xd84a4a, 0x4a7ad8, 0x4ad87a, 0xd8c84a, 0x9a4ad8, 0xe0e0e0, 0x2a2a2a, 0xd87a4a];
 const PANTS = [0x2a3a5a, 0x3a2a2a, 0x2a4a3a, 0x444444];
@@ -124,7 +124,19 @@ export function spawnPeds(scene, count, rng) {
     if (edge === 2) { x = c.x - ring; z = c.z + off; }
     if (edge === 3) { x = c.x + ring; z = c.z + off; }
     const heading = rng() * Math.PI * 2;
-    peds.push(new Ped(scene, x, z, heading, SHIRTS[Math.floor(rng() * SHIRTS.length)], PANTS[Math.floor(rng() * PANTS.length)]));
+    const ped = new Ped(scene, x, z, heading, SHIRTS[Math.floor(rng() * SHIRTS.length)], PANTS[Math.floor(rng() * PANTS.length)]);
+    // Beach strollers: about one ped in five trades the sidewalk for the
+    // sand strip along Solmar Bay (z ~ -CITY.half - 5.5), ambling slowly
+    // along the shore instead of hurrying between blocks.
+    if (rng() < 0.2) {
+      ped.pos.x = randRange(rng, -CITY.half + 6, CITY.half - 6);
+      ped.pos.z = -CITY.half - 5.5 + randRange(rng, -3, 3);
+      ped.heading = rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
+      ped.mesh.rotation.y = ped.heading;
+      ped.speed = randRange(rng, 0.6, 1.0);
+      ped.beach = true;
+    }
+    peds.push(ped);
   }
   return peds;
 }
