@@ -33,14 +33,12 @@ export function setupShot(shot, world) {
 
   if (shot === 1) {
     // Start screen: the player on the north road looking into the city,
-    // title overlay up. Camera and player both on the road so no building
-    // ever blocks the view; the camera sits high and level so the sky and
-    // towers show above the overlay, and the player stands left of centre
-    // where the button does not hide them.
-    setPlayer(-19, -142, 0.3);
-    parkCamera(camera, -12, 6, -126, -17, 3, -160);
+    // title overlay up. Camera low and level so the bay, the low sun and
+    // the towers fill the frame above the overlay instead of empty sky.
+    setPlayer(-19, -138, 0.3); // on the beach, bay and sun behind
+    parkCamera(camera, -12, 5.5, -122, -2, 4, -165); // bay + sun, city road below
     hud.showStart();
-    hud.setObjective('Five jobs. One city. Don\'t get caught.');
+    hud.setObjective('Eight jobs. One city. Don\'t get caught.');
     hud.setMoney(150);
     hud.setWanted(0);
     hud.setHealth(100);
@@ -58,6 +56,17 @@ export function setupShot(shot, world) {
     car.heading = 0;
     car.speed = 16;
     car.syncMesh();
+    // Traffic ahead in both lanes so the avenue reads as a living street.
+    const ahead = [[-17.6, 14, 11], [-12.4, 30, 13], [-17.6, 48, 9]];
+    for (let i = 0; i < ahead.length; i++) {
+      const t = cars.traffic[1 + i];
+      if (!t) break;
+      t.pos.x = ahead[i][0];
+      t.pos.z = pz + ahead[i][1];
+      t.heading = 0;
+      t.speed = ahead[i][2];
+      t.syncMesh();
+    }
     player.inCar = car;
     player.pos.x = px;
     player.pos.z = pz;
@@ -97,6 +106,9 @@ export function setupShot(shot, world) {
       c.heading = 0;
       c.syncMesh();
     });
+    // Roadblock ahead: two cruisers parked sideways across the avenue,
+    // with the dispatch banner up.
+    police.spawnRoadblock({ x: px, z: pz, heading: 0 });
     parkCamera(camera, px, 6.5, pz - 18, px, 2, pz + 12);
     hud.hideStart();
     hud.setObjective('Lose the Heat — shake the cops!');
@@ -104,6 +116,7 @@ export function setupShot(shot, world) {
     hud.setWanted(3);
     hud.setHealth(72);
     hud.setSpeed(22 * 3.6, true);
+    hud.dispatch('DISPATCH: All units converge — roadblock going up on Marina Row!', 60000);
     hud.centerMessage('WANTED ★★★ — lose them!');
     return { label: 'chase', hint: 'police pursuit' };
   }

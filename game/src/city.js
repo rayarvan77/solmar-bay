@@ -16,12 +16,12 @@ export const CITY = {
 };
 
 const PALETTE = {
-  asphalt: 0x2b2f36,
-  sidewalk: 0x8d9299,
-  grass: 0x4d7a45,
-  curb: 0x6f747b,
-  roof: [0x7a4a3a, 0x4a5a7a, 0x6a6a72, 0x8a6a4a, 0x3a6a5a, 0x5a4a6a],
-  wall: [0xb8a88a, 0x9aa4b0, 0xc0b0a0, 0x8aa0b0, 0xb0b8c0, 0xa89080],
+  asphalt: 0x3d3330,
+  sidewalk: 0xb09a7c,
+  grass: 0x77803f,
+  curb: 0x8a7a62,
+  roof: [0x9a4a30, 0x7a5a3a, 0x8a6a52, 0xa86a3a, 0x4a6a5a, 0x7a4a5a],
+  wall: [0xd8b08a, 0xc09a70, 0xe0c0a0, 0xc8a888, 0xd0b8a0, 0xb89070],
   lamp: 0xffd9a0,
 };
 
@@ -85,6 +85,40 @@ export function buildCity(scene) {
   ground.position.y = -0.05;
   ground.receiveShadow = true;
   group.add(ground);
+
+  // Solmar Bay itself: open water along the whole north edge of the map,
+  // with a sand beach between the water and the northernmost road. The
+  // golden-hour shots all face north, so the bay is in frame.
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(CITY.half * 2 + 120, 58),
+    new THREE.MeshLambertMaterial({ color: 0x2e7fa8 })
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(0, -0.02, -CITY.half - 34);
+  group.add(water);
+  const sand = new THREE.Mesh(
+    new THREE.PlaneGeometry(CITY.half * 2 + 120, 9),
+    new THREE.MeshLambertMaterial({ color: 0xd8b878 })
+  );
+  sand.rotation.x = -Math.PI / 2;
+  sand.position.set(0, 0, -CITY.half - 5.5);
+  sand.receiveShadow = true;
+  group.add(sand);
+  // Low sun disc hanging over the bay, due north.
+  const sunDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(9, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffd27a, fog: false })
+  );
+  sunDisc.position.set(-52, 18, -192);
+  sunDisc.lookAt(0, 18, 0);
+  group.add(sunDisc);
+  const sunGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(15, 24),
+    new THREE.MeshBasicMaterial({ color: 0xff9a4d, transparent: true, opacity: 0.35, fog: false })
+  );
+  sunGlow.position.set(-52, 18, -193);
+  sunGlow.lookAt(0, 18, 0);
+  group.add(sunGlow);
 
   // Asphalt: one long strip per road, both directions.
   const asphaltMat = new THREE.MeshLambertMaterial({ color: PALETTE.asphalt });

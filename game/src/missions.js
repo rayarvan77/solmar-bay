@@ -49,6 +49,31 @@ const MISSION_DEFS = [
     objective: 'Reach the bank, grab the cash, then escape to the safehouse with no cops on you.',
     reward: 1500,
   },
+  {
+    id: 'courier',
+    name: 'Sunset Courier',
+    giver: 'Dana Vega',
+    brief: 'A package for the marina buyer — 75 seconds, no excuses. The bay road is the fast way.',
+    objective: 'Deliver the package to the marker before the timer runs out.',
+    reward: 650,
+    timeLimit: 75,
+  },
+  {
+    id: 'fare2',
+    name: 'Night Fare',
+    giver: 'Dana Vega',
+    brief: 'A high-roller needs a quiet ride to the north pier. Pick them up, drop them off, keep it smooth.',
+    objective: 'Pick up the passenger at the marker, then drive them to the drop-off.',
+    reward: 450,
+  },
+  {
+    id: 'cooldown',
+    name: 'Lay Low',
+    giver: 'Dana Vega',
+    brief: 'The precinct knows your face now. Stir up the heat, then vanish — go completely quiet.',
+    objective: 'Reach wanted level 2, then bring it back down to 0.',
+    reward: 900,
+  },
 ];
 
 // A road-side point at least `minDist` away from a reference point.
@@ -129,11 +154,11 @@ export class MissionRunner {
     this.cashGrabbed = false;
     if (def.id === 'wheels') {
       this.target = farRoadPoint(this.rng, playerPos, 40);
-    } else if (def.id === 'cab') {
+    } else if (def.id === 'cab' || def.id === 'fare2') {
       this.target = farRoadPoint(this.rng, playerPos, 45);
-    } else if (def.id === 'delivery') {
+    } else if (def.id === 'delivery' || def.id === 'courier') {
       this.target = farRoadPoint(this.rng, playerPos, 70);
-    } else if (def.id === 'heat') {
+    } else if (def.id === 'heat' || def.id === 'cooldown') {
       this.target = null;
     } else if (def.id === 'score') {
       this.target = { x: nearestRoad(60), z: nearestRoad(-90) };
@@ -156,8 +181,10 @@ export class MissionRunner {
     if (this.state !== 'active' || !def) return '';
     let text = def.name + ' — ' + def.objective;
     if (def.id === 'cab' && this.stage === 1) text = def.name + ' — Passenger aboard. Drive them to the drop-off marker.';
+    if (def.id === 'fare2' && this.stage === 1) text = def.name + ' — High-roller aboard. Drive them to the north pier marker.';
     if (def.id === 'score' && this.stage === 1) text = def.name + ' — Cash grabbed! Lose the cops and reach the safehouse marker.';
     if (def.id === 'heat' && this.heatReached) text = def.name + ' — Heat is on! Now shake the cops and get wanted back to 0.';
+    if (def.id === 'cooldown' && this.heatReached) text = def.name + ' — They are looking for you! Now vanish and get wanted back to 0.';
     if (def.timeLimit) text += '  [' + formatTime(this.timer) + ']';
     return text;
   }
@@ -186,7 +213,7 @@ export class MissionRunner {
       if (nearTarget && ctx.inCar) {
         return this.complete(ctx);
       }
-    } else if (def.id === 'cab') {
+    } else if (def.id === 'cab' || def.id === 'fare2') {
       if (this.stage === 0) {
         if (nearTarget && ctx.inCar) {
           this.stage = 1;
@@ -197,9 +224,9 @@ export class MissionRunner {
       } else if (nearTarget) {
         return this.complete(ctx);
       }
-    } else if (def.id === 'delivery') {
+    } else if (def.id === 'delivery' || def.id === 'courier') {
       if (nearTarget) return this.complete(ctx);
-    } else if (def.id === 'heat') {
+    } else if (def.id === 'heat' || def.id === 'cooldown') {
       if (ctx.wanted >= 2) this.heatReached = true;
       if (this.heatReached && ctx.wanted === 0) return this.complete(ctx);
     } else if (def.id === 'score') {

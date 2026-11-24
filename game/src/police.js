@@ -14,6 +14,8 @@ export class PoliceForce {
     this.scene = scene;
     this.colliders = colliders;
     this.cars = [];
+    this.blockCars = []; // parked roadblock cars, not pursuit AI
+    this.blockTimer = 0;
     this.bustTimer = 0;
     this.spawnTimer = 0;
     this.flashTime = 0;
@@ -47,6 +49,21 @@ export class PoliceForce {
     }
 
     const sirenPhase = Math.floor(this.flashTime * 4) % 2 === 0;
+    // Roadblock: at wanted 3+, park two cruisers across the road ahead of
+    // the player; pull it when the heat is off.
+    this.blockTimer -= dt;
+    if (wanted >= 3 && this.blockCars.length === 0 && this.blockTimer <= 0) {
+      this.blockTimer = 18;
+      this.spawnRoadblock(playerPos);
+    } else if (wanted === 0 && this.blockCars.length > 0) {
+      this.clearRoadblock();
+    }
+    for (const car of this.blockCars) {
+      const red = car.mesh.getObjectByName('sirenRed');
+      const blue = car.mesh.getObjectByName('sirenBlue');
+      if (red) red.visible = sirenPhase;
+      if (blue) blue.visible = !sirenPhase;
+    }
     for (const car of this.cars) {
       // Steer towards the player with a little prediction.
       const px = playerPos.x + Math.sin(playerPos.heading || 0) * (playerSpeed || 0) * 0.4;
@@ -92,6 +109,27 @@ export class PoliceForce {
     }
   }
 
+  // Two cruisers parked sideways across the nearest road ahead of the
+  // player, leaving only a narrow gap — a real roadblock, not a chase.
+  spawnRoadblock(playerPos) {
+    const heading = Math.atan2(Math.sin(playerPos.heading || 0), Math.cos(playerPos.heading || 0));
+    const fx = Math.sin(heading);
+    const fz = Math.cos(heading);
+    const ax = playerPos.x + fx * 34;
+    const az = playerPos.z + fz * 34;
+    for (const side of [-3.4, 3.4]) {
+      const car = new Car(this.scene, ax - fz * side, az + fx * side, heading + Math.PI / 2, 0xe8e8e8, true);
+      car.speed = 0;
+      car.syncMesh();
+      this.blockCars.push(car);
+    }
+  }
+
+  clearRoadblock() {
+    for (const car of [...this.blockCars]) this.scene.remove(car.mesh);
+    this.blockCars = [];
+  }
+
   spawnPolice(playerPos) {
     // Spawn at a road on the far side of the map from the player.
     const angle = Math.atan2(playerPos.x, playerPos.z) + Math.PI + (Math.random() - 0.5) * 1.2;
@@ -112,6 +150,7 @@ export class PoliceForce {
 
   clear() {
     for (const car of [...this.cars]) this.removeCar(car);
+    this.clearRoadblock();
     this.bustTimer = 0;
   }
 }

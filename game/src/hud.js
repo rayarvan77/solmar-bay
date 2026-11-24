@@ -29,11 +29,12 @@ export class Hud {
       <div id="speedo"><span id="speed">0</span><span class="hud-label"> km/h</span></div>
       <canvas id="minimap" width="180" height="180"></canvas>
       <div id="toasts"></div>
+      <div id="dispatch"></div>
       <div id="center-msg"></div>
       <div id="start-screen">
         <h1>SOLMAR BAY</h1>
         <p class="tagline">An open-world crime story in miniature.</p>
-        <p>Five jobs. One city. Don't get caught.</p>
+        <p>Eight jobs. One city. Don't get caught.</p>
         <p class="controls">WASD move / drive &nbsp;·&nbsp; Mouse look &nbsp;·&nbsp; E enter car &nbsp;·&nbsp; F punch &nbsp;·&nbsp; Click shoot &nbsp;·&nbsp; M start mission &nbsp;·&nbsp; H horn</p>
         <button id="play-btn">CLICK TO PLAY</button>
         <p class="fine">Progress saves to this browser. Dana Vega is waiting.</p>
@@ -113,6 +114,15 @@ export class Hud {
     this._centerTimer = setTimeout(() => el.classList.remove('show'), ms);
   }
 
+  // Police dispatch banner: a radio-style strip under the top bar.
+  dispatch(text, ms = 4200) {
+    const el = this.root.querySelector('#dispatch');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(this._dispatchTimer);
+    this._dispatchTimer = setTimeout(() => el.classList.remove('show'), ms);
+  }
+
   toast(text, ms = 3600) {
     const box = this.root.querySelector('#toasts');
     const div = document.createElement('div');
@@ -134,11 +144,14 @@ export class Hud {
     const scale = S / (CITY.half * 2 + 30);
     const toMap = (x, z) => [(x + CITY.half + 15) * scale, (z + CITY.half + 15) * scale];
     ctx.clearRect(0, 0, S, S);
-    ctx.fillStyle = '#10141a';
+    ctx.fillStyle = '#274028';
     ctx.fillRect(0, 0, S, S);
-    ctx.fillStyle = '#1d2b1d';
-    ctx.fillRect(0, 0, S, S);
-    ctx.strokeStyle = '#3a4048';
+    // The bay along the north edge (top of the map).
+    ctx.fillStyle = '#2e7fa8';
+    ctx.fillRect(0, 0, S, 8);
+    ctx.fillStyle = '#d8b878';
+    ctx.fillRect(0, 8, S, 2);
+    ctx.strokeStyle = '#8a94a0';
     ctx.lineWidth = 3;
     for (const l of roadLines()) {
       const [x1, y1] = toMap(l, -CITY.half - 15);

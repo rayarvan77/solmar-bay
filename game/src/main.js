@@ -31,16 +31,16 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('game').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87a8c8);
-scene.fog = new THREE.Fog(0x87a8c8, 90, 260);
+scene.background = new THREE.Color(0xf2a05e); // golden hour over the bay
+scene.fog = new THREE.Fog(0xf2a05e, 90, 260);
 
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 600);
 camera.position.set(0, 6, -14);
 
-const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x3a4a3a, 0.9);
+const hemi = new THREE.HemisphereLight(0xffd9a0, 0x5a4636, 0.9);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffe8b0, 1.6);
-sun.position.set(80, 120, 40);
+const sun = new THREE.DirectionalLight(0xffb060, 1.9);
+sun.position.set(-90, 55, -140); // low sun over the bay, long shadows
 sun.castShadow = true;
 sun.shadow.camera.left = -160;
 sun.shadow.camera.right = 160;
@@ -109,7 +109,7 @@ function loadSave() {
     const data = JSON.parse(raw);
     if (typeof data.money === 'number') player.money = data.money;
     if (typeof data.missionsDone === 'number') {
-      missions.index = Math.min(data.missionsDone, 5);
+      missions.index = Math.min(data.missionsDone, 8);
       missions.done = missions.index;
     }
   } catch (e) {
@@ -184,6 +184,11 @@ function addHeat(amount, reason) {
   if (level > player.wanted) {
     player.wanted = level;
     hud.centerMessage('WANTED LEVEL ' + level + (reason ? ' — ' + reason : ''), 2600);
+    hud.dispatch('DISPATCH: ' + (level >= 3
+      ? 'All units converge on Solmar Bay — roadblock going up on Marina Row!'
+      : level === 2
+        ? 'Units responding — suspect last seen near Marina Row.'
+        : 'Unit 7 responding — possible 10-31 in progress.'));
     sounds.setSiren(level > 0);
   }
 }
@@ -443,6 +448,20 @@ function updatePlayerInCar(dt) {
       if (Math.abs(prevSpeed) > 7) sounds.thud();
     }
   }
+  // Roadblock cruisers are parked solid: hitting one hurts.
+  for (const block of police.blockCars) {
+    const d = Math.hypot(block.pos.x - car.pos.x, block.pos.z - car.pos.z);
+    if (d < 3.2 && Math.abs(car.speed) > 3) {
+      car.speed *= 0.3;
+      player.health -= 6;
+      hud.setHealth(player.health);
+      hud.toast('You smashed into a police roadblock!');
+      sounds.thud();
+      if (player.health <= 0) wasted();
+    } else if (d < 3.2) {
+      car.speed *= 0.85;
+    }
+  }
   sounds.setEngine(Math.abs(car.speed) / 26, true);
 }
 
@@ -487,6 +506,7 @@ function tick() {
 
     updateTraffic(traffic, dt, elapsed);
     for (const ped of peds) ped.update(dt, player.pos, elapsed);
+    player.pos.heading = player.heading; // police aim/roadblock use it
     police.update(dt, player.pos, player.speed, player.wanted, busted, (speed) => {
       player.health -= speed * 0.55;
       hud.setHealth(player.health);
